@@ -3,10 +3,9 @@
 import { useState } from "react"
 import Link from "next/link"
 import Sidebar from "@/components/sidebar"
-import StatCard from "@/components/stat-card"
 import ContractCard from "@/components/contract-card"
 
-export default function Home() {
+export default function VerTodos() {
   const [contracts] = useState([
     {
       id: "CT-2024-001",
@@ -32,6 +31,30 @@ export default function Home() {
       value: "R$ 45.000,00",
       date: "Vence: 2024-12-15",
     },
+    {
+      id: "CT-2024-004",
+      status: "ATIVO",
+      company: "Fornecedor ABC Ltda",
+      unit: "Unidade Centro",
+      value: "R$ 45.000,00",
+      date: "Vence: 2024-12-15",
+    },
+    {
+      id: "CT-2024-005",
+      status: "ATIVO",
+      company: "Fornecedor ABC Ltda",
+      unit: "Unidade Centro",
+      value: "R$ 45.000,00",
+      date: "Vence: 2024-12-15",
+    },
+    {
+      id: "CT-2024-006",
+      status: "ATIVO",
+      company: "Fornecedor ABC Ltda",
+      unit: "Unidade Centro",
+      value: "R$ 45.000,00",
+      date: "Vence: 2024-12-15",
+    },
   ])
 
   return (
@@ -44,19 +67,12 @@ export default function Home() {
             <p className="text-muted-foreground">Visão geral do sistema de contratos</p>
           </div>
 
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <StatCard title="Contratos ativos" value="24" icon="📋" color="bg-blue-100" iconBg="bg-blue-500" />
-            <StatCard title="Pendentes de ação" value="7" icon="⚠️" color="bg-orange-100" iconBg="bg-orange-500" />
-            <StatCard title="Atrasados" value="3" icon="🚨" color="bg-red-100" iconBg="bg-red-500" />
-          </div>
-
-          {/* Recent Contracts */}
+          {/* All Contracts */}
           <div className="bg-white rounded-2xl shadow-sm p-6">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-lg font-semibold text-foreground">Contratos recentes</h2>
-              <Link href="/ver-todos" className="text-primary hover:text-primary/80 text-sm font-medium">
-                Ver Todos
+              <Link href="/" className="text-primary hover:text-primary/80 text-sm font-medium">
+                ← Voltar
               </Link>
             </div>
             <div className="space-y-4">
