@@ -5,6 +5,50 @@ export interface ContractSimpleDto {
     isDeleted: boolean;
 }
 
+export interface SupplierDto {
+    id: string;
+    corporateName: string;
+    cnpj: string;
+    active: boolean;
+}
+
+export interface OrgUnitDto {
+    id: string;
+    name: string;
+    code?: string;
+}
+
+export interface CreateContractRequest {
+    officialNumber: string;
+    supplierId: string;
+    orgUnitId: string;
+    type: number;
+    modality: number;
+    termStart: string;
+    termEnd: string;
+    totalAmount: number;
+    currency: string;
+    administrativeProcess?: string;
+}
+
+export interface CreateSupplierRequest {
+    corporateName: string;
+    cnpj: string;
+    active: boolean;
+}
+
+export interface CreateOrgUnitRequest {
+    name: string;
+    code?: string;
+}
+
+export interface CreateObligationRequest {
+    clauseRef: string;
+    description: string;
+    dueDate?: string;
+    status?: string;
+}
+
 export interface PenaltyDto {
     id: string;
     type: string;
