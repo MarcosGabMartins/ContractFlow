@@ -130,3 +130,40 @@ export interface AttachmentDto {
     mimeType: string;
     storagePath: string;
 }
+
+export interface CreateDeliverableRequest {
+    expectedDate: string;
+    quantity: number;
+    unit: string;
+}
+
+export interface MarkDeliveredRequest {
+    deliveredAt: string;
+}
+
+export interface RegisterNonComplianceRequest {
+    reason: string;
+    severity: string;
+}
+
+export interface ApplyPenaltyRequest {
+    type: string;
+    legalBasis: string;
+    amount: number;
+}
+
+// DTOs para Relatórios
+export interface DueDeliverableReportDto {
+    contractId: string;
+    officialNumber: string;
+    deliverableId: string;
+    description: string; // Vindo da Obrigação
+    expectedDate: string;
+    daysOverdue: number;
+}
+
+export interface DashboardStatsDto {
+    activeContracts: number;
+    pendingActions: number;
+    overdueDeliverables: number;
+}
