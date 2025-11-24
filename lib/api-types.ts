@@ -167,3 +167,29 @@ export interface DashboardStatsDto {
     pendingActions: number;
     overdueDeliverables: number;
 }
+
+export interface CreateInspectionRequest {
+    date: string;
+    inspector: string;
+    notes: string;
+}
+
+export interface InspectionDto {
+    id: string;
+    date: string;
+    inspector: string;
+    notes: string;
+}
+
+// DTOs para Relatórios de Desempenho
+export interface DeliveriesBySupplierDto {
+    supplierName: string;
+    totalDeliveries: number;
+    onTime: number;
+    late: number;
+}
+
+export interface DeliveriesByOrgUnitDto {
+    orgUnitName: string;
+    totalDeliveries: number;
+}

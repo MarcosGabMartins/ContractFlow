@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from "react"
 import Sidebar from "@/components/sidebar"
-import { Search, Eye, Trash2, Plus, CheckSquare, AlertTriangle, Scale } from "lucide-react"
+import { Search, Eye, Trash2, Plus, CheckSquare, AlertTriangle, Scale, ClipboardCheck, UploadCloud } from "lucide-react"
 import { API_BASE_URL } from "@/lib/config"
 import { 
   ContractSimpleDto, ContractDetailsDto, CreateObligationRequest, 
-  CreateDeliverableRequest, RegisterNonComplianceRequest, ApplyPenaltyRequest 
+  CreateDeliverableRequest, RegisterNonComplianceRequest, ApplyPenaltyRequest,
+  CreateInspectionRequest
 } from "@/lib/api-types"
 
 interface ContractSearchResult {
@@ -18,6 +19,7 @@ interface ContractSearchResult {
 }
 
 export default function ContratosPage() {
+  // ... (Mantenha os estados existentes: activeTab, searchTerm, etc.)
   const [activeTab, setActiveTab] = useState("search")
   const [searchTerm, setSearchTerm] = useState("");
   const [allContracts, setAllContracts] = useState<ContractSearchResult[]>([]);
@@ -25,15 +27,27 @@ export default function ContratosPage() {
   const [selectedContractId, setSelectedContractId] = useState<string | null>(null);
   const [contractDetails, setContractDetails] = useState<ContractDetailsDto | null>(null);
   const [detailsTab, setDetailsTab] = useState("info");
-  const [activeModal, setActiveModal] = useState<"deliverable" | "noncompliance" | "penalty" | null>(null);
+  
+  // Modais
+  const [activeModal, setActiveModal] = useState<"deliverable" | "noncompliance" | "penalty" | "inspection" | "evidence" | null>(null);
+  
+  // IDs selecionados
   const [selectedObligationId, setSelectedObligationId] = useState("");
   const [selectedNcId, setSelectedNcId] = useState("");
+  const [selectedDeliverableId, setSelectedDeliverableId] = useState(""); // NOVO
+
+  // Forms
   const [showObliForm, setShowObliForm] = useState(false);
   const [newObligation, setNewObligation] = useState<CreateObligationRequest>({ clauseRef: "", description: "", dueDate: "", status: "Pendente" });
   const [newDeliverable, setNewDeliverable] = useState<CreateDeliverableRequest>({ expectedDate: "", quantity: 0, unit: "" });
   const [newNonCompliance, setNewNonCompliance] = useState<RegisterNonComplianceRequest>({ reason: "", severity: "Baixo" });
   const [newPenalty, setNewPenalty] = useState<ApplyPenaltyRequest>({ type: "Multa", legalBasis: "", amount: 0 });
+  
+  // NOVOS ESTADOS PARA FISCALIZAÇÃO
+  const [newInspection, setNewInspection] = useState<CreateInspectionRequest>({ date: "", inspector: "", notes: "" });
+  const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
 
+  // ... (Mantenha getStatusColor, fetchDetails, fetchContracts, useEffects, handleAddObligation, handleDeleteObligation) ...
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
       case "active": return "bg-green-100 text-green-800";
@@ -92,7 +106,7 @@ export default function ContratosPage() {
       if (!res.ok) throw new Error("Erro ao adicionar");
       setShowObliForm(false);
       setNewObligation({ clauseRef: "", description: "", dueDate: "", status: "Pendente" });
-      fetchDetails(); // Refresh
+      fetchDetails();
       alert("Obrigação adicionada!");
     } catch (e) { alert("Erro ao salvar obrigação."); }
   };
@@ -106,6 +120,7 @@ export default function ContratosPage() {
     } catch (e) { alert("Erro ao excluir."); }
   };
 
+  // ... (Mantenha handleCreateDeliverable, handleMarkDelivered, handleRegisterNonCompliance, handleApplyPenalty) ...
   const handleCreateDeliverable = async () => {
     if (!selectedObligationId) return;
     try {
@@ -164,15 +179,88 @@ export default function ContratosPage() {
     } catch { alert("Erro ao aplicar penalidade"); }
   };
 
+  // --- NOVAS FUNÇÕES DE FISCALIZAÇÃO ---
+
+  const handleRegisterInspection = async () => {
+    if (!selectedDeliverableId) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/deliverables/${selectedDeliverableId}/inspections`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            ...newInspection,
+            date: newInspection.date || new Date().toISOString()
+        })
+      });
+      if (!res.ok) throw new Error();
+      setActiveModal(null);
+      setNewInspection({ date: "", inspector: "", notes: "" });
+      alert("Inspeção registrada!");
+    } catch { alert("Erro ao registrar inspeção."); }
+  };
+
+  const handleUploadEvidence = async () => {
+    if (!selectedDeliverableId || !evidenceFile) return;
+    const formData = new FormData();
+    formData.append("File", evidenceFile);
+    formData.append("notes", "Evidência anexada via web");
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/deliverables/${selectedDeliverableId}/evidences`, {
+        method: "POST",
+        body: formData
+      });
+      if (!res.ok) throw new Error();
+      setActiveModal(null);
+      setEvidenceFile(null);
+      alert("Evidência enviada!");
+    } catch { alert("Erro no upload de evidência."); }
+  };
+
   return (
     <div className="flex h-screen bg-background">
       <Sidebar />
       <main className="flex-1 overflow-auto p-8">
-        {/* ... (Cabeçalho e Lista de Busca mantidos igual ao original) ... */}
-        
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold text-primary mb-2">Buscar Contratos</h1>
+          <p className="text-muted-foreground">Pesquise e gerencie obrigações contratuais</p>
+        </div>
+
+        {activeTab === "search" && (
+          <div className="space-y-6">
+            {/* ... (Mantenha a barra de busca e lista de contratos) ... */}
+            <div className="bg-white rounded-2xl shadow-sm p-6 flex gap-4">
+              <div className="flex-1 flex items-center gap-2 bg-gray-100 rounded-lg px-4">
+                <Search size={20} className="text-gray-400" />
+                <input type="text" placeholder="Buscar por Nº Oficial" className="flex-1 bg-transparent outline-none text-sm py-3" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+              </div>
+            </div>
+            <div className="bg-white rounded-2xl shadow-sm p-6">
+              <div className="space-y-4">
+                {filteredContracts.map((contract) => (
+                  <div key={contract.id} className="border border-gray-200 rounded-xl p-4 hover:shadow-md cursor-pointer flex justify-between items-center" onClick={() => { setSelectedContractId(contract.id); setActiveTab("details"); }}>
+                    <div>
+                      <div className="flex items-center gap-3 mb-2">
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${contract.statusColor}`}>{contract.status}</span>
+                        <span className="font-semibold">{contract.officialNumber}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">ID: {contract.id}</p>
+                    </div>
+                    <Eye size={18} className="text-primary" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {activeTab === "details" && contractDetails && (
           <div className="bg-white rounded-2xl shadow-sm p-6">
-            {/* ... (Info do contrato mantida) ... */}
+            <button onClick={() => setActiveTab("search")} className="text-primary text-sm mb-4">← Voltar</button>
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold">{contractDetails.officialNumber}</h2>
+              <span className="text-sm text-muted-foreground">{contractDetails.supplierName}</span>
+            </div>
 
             <div className="flex gap-4 border-b mb-6">
               {["info", "obligations", "execution"].map(t => (
@@ -182,13 +270,48 @@ export default function ContratosPage() {
               ))}
             </div>
 
-            {/* TAB: OBRIGAÇÕES (Mantida similar, mas simplificada para focar na estrutura) */}
-            {detailsTab === 'obligations' && (
-               /* ... (Código existente de listar/criar obrigações) ... */
-               <div className="text-gray-500">Use a aba "Execução" para gerenciar entregas dessas obrigações.</div>
+            {/* ... (Aba Info e Obligations mantidas) ... */}
+            {detailsTab === 'info' && (
+              <div className="grid grid-cols-2 gap-6">
+                <div><p className="text-xs text-gray-500">Fornecedor</p><p className="font-medium">{contractDetails.supplierName}</p></div>
+                <div><p className="text-xs text-gray-500">Valor</p><p className="font-medium">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: contractDetails.currency }).format(contractDetails.totalAmount)}</p></div>
+                <div><p className="text-xs text-gray-500">Vigência</p><p className="font-medium">{new Date(contractDetails.termStart).toLocaleDateString()} - {new Date(contractDetails.termEnd).toLocaleDateString()}</p></div>
+                <div><p className="text-xs text-gray-500">Modalidade</p><p className="font-medium">{contractDetails.modality}</p></div>
+              </div>
             )}
 
-            {/* TAB: EXECUÇÃO (NOVA) */}
+            {detailsTab === 'obligations' && (
+              <div className="space-y-4">
+                <div className="flex justify-end">
+                  <button onClick={() => setShowObliForm(!showObliForm)} className="flex items-center gap-2 text-sm bg-primary text-white px-3 py-1 rounded hover:bg-primary/90">
+                    <Plus size={16} /> Nova Obrigação
+                  </button>
+                </div>
+                {showObliForm && (
+                  <div className="bg-gray-50 p-4 rounded border">
+                    {/* Form Obrigação */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-2">
+                      <input className="border p-1 rounded text-sm" placeholder="Ref. Cláusula (ex: 2.1)" value={newObligation.clauseRef} onChange={e => setNewObligation({...newObligation, clauseRef: e.target.value})} />
+                      <input className="border p-1 rounded text-sm md:col-span-2" placeholder="Descrição" value={newObligation.description} onChange={e => setNewObligation({...newObligation, description: e.target.value})} />
+                      <input type="date" className="border p-1 rounded text-sm" value={newObligation.dueDate || ''} onChange={e => setNewObligation({...newObligation, dueDate: e.target.value})} />
+                      <button onClick={handleAddObligation} className="bg-green-600 text-white px-3 py-1 rounded text-sm">Salvar</button>
+                    </div>
+                  </div>
+                )}
+                {contractDetails.obligations.map(ob => (
+                  <div key={ob.id} className="p-4 border rounded-lg flex justify-between items-start group">
+                    <div>
+                      <h4 className="font-semibold">{ob.clauseRef} - {ob.description}</h4>
+                      <p className="text-sm text-muted-foreground">Status: {ob.status} | Vencimento: {ob.dueDate ? new Date(ob.dueDate).toLocaleDateString() : 'N/A'}</p>
+                    </div>
+                    <button onClick={() => handleDeleteObligation(ob.id)} className="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {detailsTab === 'execution' && (
               <div className="space-y-8">
                 {contractDetails.obligations.map(ob => (
@@ -196,16 +319,10 @@ export default function ContratosPage() {
                     <div className="flex justify-between items-center mb-4 border-b pb-2">
                       <h3 className="font-bold text-lg text-gray-800">Obrigação: {ob.description}</h3>
                       <div className="flex gap-2">
-                        <button 
-                          onClick={() => { setSelectedObligationId(ob.id); setActiveModal("deliverable"); }}
-                          className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 flex items-center gap-1"
-                        >
+                        <button onClick={() => { setSelectedObligationId(ob.id); setActiveModal("deliverable"); }} className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 flex items-center gap-1">
                           <Plus size={14} /> Add Entregável
                         </button>
-                        <button 
-                          onClick={() => { setSelectedObligationId(ob.id); setActiveModal("noncompliance"); }}
-                          className="text-xs bg-red-600 text-white px-3 py-1.5 rounded hover:bg-red-700 flex items-center gap-1"
-                        >
+                        <button onClick={() => { setSelectedObligationId(ob.id); setActiveModal("noncompliance"); }} className="text-xs bg-red-600 text-white px-3 py-1.5 rounded hover:bg-red-700 flex items-center gap-1">
                           <AlertTriangle size={14} /> Reportar Falha
                         </button>
                       </div>
@@ -213,7 +330,7 @@ export default function ContratosPage() {
 
                     {/* Lista de Entregáveis */}
                     <div className="mb-4">
-                      <h4 className="text-sm font-semibold text-gray-500 uppercase mb-2">Entregáveis Planejados</h4>
+                      <h4 className="text-sm font-semibold text-gray-500 uppercase mb-2">Entregas e Fiscalização</h4>
                       {ob.deliverables.length === 0 ? <p className="text-sm text-gray-400">Nenhum entregável definido.</p> : (
                         <div className="space-y-2">
                           {ob.deliverables.map(dev => (
@@ -223,11 +340,21 @@ export default function ContratosPage() {
                                 <span className="text-sm text-gray-500 mx-2">|</span>
                                 <span className="text-sm text-gray-500">Previsto: {new Date(dev.expectedDate).toLocaleDateString()}</span>
                               </div>
-                              {dev.deliveredAt ? (
-                                <span className="text-green-600 text-sm font-bold flex items-center gap-1"><CheckSquare size={16}/> Entregue em {new Date(dev.deliveredAt).toLocaleDateString()}</span>
-                              ) : (
-                                <button onClick={() => handleMarkDelivered(dev.id)} className="text-sm border border-green-600 text-green-600 px-2 py-1 rounded hover:bg-green-50">Marcar Entregue</button>
-                              )}
+                              <div className="flex gap-2 items-center">
+                                 {/* Botões de Fiscalização */}
+                                <button onClick={() => { setSelectedDeliverableId(dev.id); setActiveModal("inspection"); }} className="text-xs border border-gray-300 px-2 py-1 rounded hover:bg-gray-100 flex gap-1" title="Registrar Inspeção">
+                                    <ClipboardCheck size={14}/> Insp.
+                                </button>
+                                <button onClick={() => { setSelectedDeliverableId(dev.id); setActiveModal("evidence"); }} className="text-xs border border-gray-300 px-2 py-1 rounded hover:bg-gray-100 flex gap-1" title="Anexar Evidência">
+                                    <UploadCloud size={14}/> Evid.
+                                </button>
+
+                                {dev.deliveredAt ? (
+                                    <span className="text-green-600 text-sm font-bold flex items-center gap-1 px-2"><CheckSquare size={16}/> Entregue</span>
+                                ) : (
+                                    <button onClick={() => handleMarkDelivered(dev.id)} className="text-sm bg-green-50 text-green-600 px-2 py-1 rounded hover:bg-green-100">Confirmar</button>
+                                )}
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -266,7 +393,9 @@ export default function ContratosPage() {
           </div>
         )}
 
-        {/* MODAIS SIMPLES */}
+        {/* --- MODAIS --- */}
+        
+        {/* Modal Entregável */}
         {activeModal === "deliverable" && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
             <div className="bg-white p-6 rounded-xl w-96">
@@ -282,6 +411,7 @@ export default function ContratosPage() {
           </div>
         )}
 
+        {/* Modal Não Conformidade */}
         {activeModal === "noncompliance" && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
             <div className="bg-white p-6 rounded-xl w-96">
@@ -298,6 +428,7 @@ export default function ContratosPage() {
           </div>
         )}
 
+        {/* Modal Penalidade */}
         {activeModal === "penalty" && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
             <div className="bg-white p-6 rounded-xl w-96">
@@ -310,6 +441,39 @@ export default function ContratosPage() {
               <div className="flex justify-end gap-2">
                 <button onClick={() => setActiveModal(null)} className="px-4 py-2 text-gray-500">Cancelar</button>
                 <button onClick={handleApplyPenalty} className="px-4 py-2 bg-red-800 text-white rounded">Aplicar</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal Inspeção (NOVO) */}
+        {activeModal === "inspection" && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white p-6 rounded-xl w-96">
+              <h3 className="font-bold mb-4">Registrar Inspeção</h3>
+              <input type="date" className="w-full border p-2 rounded mb-2" onChange={e => setNewInspection({...newInspection, date: e.target.value})} />
+              <input type="text" placeholder="Fiscal Responsável" className="w-full border p-2 rounded mb-2" onChange={e => setNewInspection({...newInspection, inspector: e.target.value})} />
+              <textarea placeholder="Notas da Vistoria..." className="w-full border p-2 rounded mb-4" onChange={e => setNewInspection({...newInspection, notes: e.target.value})} />
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setActiveModal(null)} className="px-4 py-2 text-gray-500">Cancelar</button>
+                <button onClick={handleRegisterInspection} className="px-4 py-2 bg-blue-600 text-white rounded">Salvar</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal Evidência (NOVO) */}
+        {activeModal === "evidence" && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white p-6 rounded-xl w-96">
+              <h3 className="font-bold mb-4">Anexar Evidência</h3>
+              <div className="border-2 border-dashed border-gray-300 p-8 rounded text-center cursor-pointer hover:bg-gray-50 mb-4">
+                 <input type="file" onChange={e => e.target.files && setEvidenceFile(e.target.files[0])} />
+                 <p className="text-xs text-gray-500 mt-2">Selecione foto ou documento</p>
+              </div>
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setActiveModal(null)} className="px-4 py-2 text-gray-500">Cancelar</button>
+                <button onClick={handleUploadEvidence} disabled={!evidenceFile} className="px-4 py-2 bg-green-600 text-white rounded disabled:opacity-50">Enviar</button>
               </div>
             </div>
           </div>
