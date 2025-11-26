@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import Image from "next/image"
 
 export default function Sidebar() {
   const pathname = usePathname()
@@ -16,19 +17,17 @@ export default function Sidebar() {
   ]
 
   return (
-    <aside className="w-48 bg-primary text-primary-foreground flex flex-col">
+    <aside className="w- bg-primary text-primary-foreground flex flex-col">
       {/* Logo */}
-      <div className="p-6 border-b border-primary/20">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-green-400 rounded-full flex items-center justify-center">
-            <span className="text-primary font-bold">✓</span>
+      <div className="relative w-50 h-50">
+            {/* Certifique-se de ter um arquivo 'logo.png' na pasta 'public' */}
+            <Image 
+              src="/contract.svg" 
+              alt="Logo Contract Flow" 
+              fill 
+              className="object-contain"
+            />
           </div>
-          <div>
-            <div className="font-bold text-sm">contract</div>
-            <div className="font-bold text-sm">flow</div>
-          </div>
-        </div>
-      </div>
 
       {/* Menu Items */}
       <nav className="flex-1 p-4">

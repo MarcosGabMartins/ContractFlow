@@ -1,7 +1,7 @@
 "use client"
 
 import Sidebar from "@/components/sidebar"
-import { Upload, FileText, CheckCircle, Plus, Building2, Users, Trash2, FileSignature } from "lucide-react"
+import { Upload, CheckCircle, Building2, Users, Trash2, FileSignature, Pencil } from "lucide-react"
 import { useState, useEffect, ChangeEvent, FormEvent } from "react"
 import { API_BASE_URL } from "@/lib/config"
 import { toast } from "sonner"
@@ -15,6 +15,9 @@ export default function CadastrarPage() {
   const [orgUnits, setOrgUnits] = useState<OrgUnitDto[]>([])
   const [contracts, setContracts] = useState<ContractSimpleDto[]>([])
   const [isLoading, setIsLoading] = useState(false)
+
+  // --- Estado de Edição ---
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   // --- Formulários ---
   const [contractForm, setContractForm] = useState<CreateContractRequest>({
@@ -77,12 +80,12 @@ export default function CadastrarPage() {
       })
       if (!res.ok) throw new Error("Erro na requisição")
       
-      toast.success(successMsg) // <--- LINHA ALTERADA
+      toast.success(successMsg)
       clearForm()
       fetchAllData() 
     } catch (err) {
       console.error(err)
-      toast.error("Ocorreu um erro ao tentar salvar.") // <--- LINHA ALTERADA
+      toast.error("Ocorreu um erro ao tentar salvar.")
     } finally {
       setIsLoading(false)
     }
@@ -91,13 +94,37 @@ export default function CadastrarPage() {
   const handleContractSubmit = (e: FormEvent) => {
     e.preventDefault()
     submitForm(`${API_BASE_URL}/api/contracts`, contractForm, "Contrato criado!", () => setContractForm({
-      ...contractForm, officialNumber: "", administrativeProcess: "" // Limpa campos principais
+      ...contractForm, officialNumber: "", administrativeProcess: ""
     }))
   }
 
+  // --- Submit de Fornecedor (Com suporte a Edição) ---
   const handleSupplierSubmit = (e: FormEvent) => {
     e.preventDefault()
-    submitForm(`${API_BASE_URL}/api/suppliers`, supplierForm, "Fornecedor cadastrado!", () => setSupplierForm({ corporateName: "", cnpj: "", active: true }))
+    
+    const url = editingId 
+        ? `${API_BASE_URL}/api/suppliers/${editingId}` 
+        : `${API_BASE_URL}/api/suppliers`;
+    
+    const method = editingId ? "PUT" : "POST";
+    const successMsg = editingId ? "Fornecedor atualizado!" : "Fornecedor cadastrado!";
+
+    setIsLoading(true);
+    
+    fetch(url, {
+        method: method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(supplierForm)
+    })
+    .then(async (res) => {
+        if (!res.ok) throw new Error();
+        toast.success(successMsg);
+        setSupplierForm({ corporateName: "", cnpj: "", active: true });
+        setEditingId(null); // Limpa modo de edição
+        fetchAllData();
+    })
+    .catch(() => toast.error("Erro ao salvar."))
+    .finally(() => setIsLoading(false));
   }
 
   const handleOrgUnitSubmit = (e: FormEvent) => {
@@ -105,19 +132,28 @@ export default function CadastrarPage() {
     submitForm(`${API_BASE_URL}/api/orgunits`, orgUnitForm, "Unidade cadastrada!", () => setOrgUnitForm({ name: "", code: "" }))
   }
 
+  // --- Preparar Edição ---
+  const startEditingSupplier = (supplier: SupplierDto) => {
+    setSupplierForm({
+        corporateName: supplier.corporateName,
+        cnpj: supplier.cnpj,
+        active: supplier.active
+    });
+    setEditingId(supplier.id);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
   // --- Deletes ---
   const handleDelete = async (url: string) => {
-    // Podemos usar um toast com promessa ou confirmação customizada no futuro, 
-    // mas por enquanto o confirm nativo é seguro para deleção crítica.
     if (!confirm("Tem certeza que deseja excluir?")) return
     
     try {
       const res = await fetch(url, { method: "DELETE" })
       if (!res.ok) throw new Error("Erro ao excluir")
-      toast.success("Item excluído com sucesso!") // <--- ADICIONADO
+      toast.success("Item excluído com sucesso!")
       fetchAllData()
     } catch (err) {
-      toast.error("Erro ao excluir. O item pode estar em uso.") // <--- ADICIONADO
+      toast.error("Erro ao excluir. O item pode estar em uso.")
     }
   }
 
@@ -143,13 +179,10 @@ export default function CadastrarPage() {
       const newAtt = await res.json()
       setUploadedFiles(prev => [newAtt, ...prev])
       setSelectedFile(null)
-      
-      // AQUI ESTAVA O ALERT: Substituído pelo toast
       toast.success("Documento enviado com sucesso!") 
       
     } catch (err) { 
       console.error(err);
-      // AQUI ESTAVA O ALERT: Substituído pelo toast
       toast.error("Erro ao enviar o documento. Tente novamente.") 
     }
     finally { setIsLoading(false) }
@@ -174,7 +207,7 @@ export default function CadastrarPage() {
           ].map(tab => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
+              onClick={() => { setActiveTab(tab.id as any); setEditingId(null); }}
               className={`px-4 py-2 font-medium flex items-center gap-2 rounded-t-lg transition-colors ${
                 activeTab === tab.id ? "bg-white text-primary border-x border-t border-gray-200 -mb-px" : "text-muted-foreground hover:bg-gray-50"
               }`}
@@ -217,7 +250,7 @@ export default function CadastrarPage() {
                     <input required type="date" name="termStart" value={contractForm.termStart} onChange={handleInputChange(setContractForm)} className="border p-2 rounded" />
                     <input required type="date" name="termEnd" value={contractForm.termEnd} onChange={handleInputChange(setContractForm)} className="border p-2 rounded" />
                   </div>
-                  <h3 className="font-semibold border-b pb-2">Valor Total</h3>
+                  <h3 className="font-semibold">Valor Total</h3>
                   <input required type="number" step="0.01" name="totalAmount" value={contractForm.totalAmount} onChange={handleInputChange(setContractForm)} placeholder="Valor Total" className="w-full border p-2 rounded" />
                 </div>
               </div>
@@ -252,15 +285,26 @@ export default function CadastrarPage() {
             </div>
           )}
 
-          {/* ABA: FORNECEDORES */}
+          {/* ABA: FORNECEDORES (Com Edição) */}
           {activeTab === "supplier" && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               <form onSubmit={handleSupplierSubmit} className="space-y-4 border p-4 rounded-lg h-fit">
-                <h3 className="font-semibold text-lg">Novo Fornecedor</h3>
+                <h3 className="font-semibold text-lg">{editingId ? "Editar Fornecedor" : "Novo Fornecedor"}</h3>
                 <input required name="corporateName" value={supplierForm.corporateName} onChange={handleInputChange(setSupplierForm)} placeholder="Razão Social" className="w-full border p-2 rounded" />
                 <input required name="cnpj" value={supplierForm.cnpj} onChange={handleInputChange(setSupplierForm)} placeholder="CNPJ" className="w-full border p-2 rounded" />
-                <button type="submit" disabled={isLoading} className="w-full bg-primary text-white py-2 rounded">Salvar</button>
+                
+                <div className="flex gap-2">
+                    <button type="submit" disabled={isLoading} className="flex-1 bg-primary text-white py-2 rounded hover:bg-primary/90">
+                        {editingId ? "Atualizar" : "Salvar"}
+                    </button>
+                    {editingId && (
+                        <button type="button" onClick={() => { setEditingId(null); setSupplierForm({ corporateName: "", cnpj: "", active: true }) }} className="bg-gray-200 text-gray-700 px-4 rounded hover:bg-gray-300">
+                            Cancelar
+                        </button>
+                    )}
+                </div>
               </form>
+              
               <div className="lg:col-span-2 space-y-2">
                 <h3 className="font-semibold text-lg">Lista de Fornecedores</h3>
                 {suppliers.map(s => (
@@ -269,7 +313,14 @@ export default function CadastrarPage() {
                       <p className="font-medium">{s.corporateName}</p>
                       <p className="text-sm text-muted-foreground">{s.cnpj}</p>
                     </div>
-                    <button onClick={() => handleDelete(`${API_BASE_URL}/api/suppliers/${s.id}`)} className="text-red-500 hover:bg-red-50 p-2 rounded"><Trash2 size={18} /></button>
+                    <div className="flex gap-2">
+                        <button onClick={() => startEditingSupplier(s)} className="text-blue-500 hover:bg-blue-50 p-2 rounded">
+                            <Pencil size={18} />
+                        </button>
+                        <button onClick={() => handleDelete(`${API_BASE_URL}/api/suppliers/${s.id}`)} className="text-red-500 hover:bg-red-50 p-2 rounded">
+                            <Trash2 size={18} />
+                        </button>
+                    </div>
                   </div>
                 ))}
               </div>

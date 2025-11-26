@@ -2,13 +2,13 @@
 
 import { useState, useEffect } from "react"
 import Sidebar from "@/components/sidebar"
-import {Download, FileText, Camera} from "lucide-react"
-import { Search, Eye, Trash2, Plus, CheckSquare, AlertTriangle, Scale, ClipboardCheck, UploadCloud, CheckCircle } from "lucide-react"
+import { Download, FileText, Camera, Search, Eye, Trash2, Plus, AlertTriangle, Scale, ClipboardCheck, UploadCloud, CheckCircle } from "lucide-react"
 import { API_BASE_URL } from "@/lib/config"
+import { toast } from "sonner"
 import { 
   ContractSimpleDto, ContractDetailsDto, CreateObligationRequest, 
   CreateDeliverableRequest, RegisterNonComplianceRequest, ApplyPenaltyRequest,
-  CreateInspectionRequest
+  CreateInspectionRequest, EvidenceDto
 } from "@/lib/api-types"
 
 interface ContractSearchResult {
@@ -33,7 +33,6 @@ interface InspectionViewDto {
 }
 
 export default function ContratosPage() {
-  // ... (Mantenha os estados existentes: activeTab, searchTerm, etc.)
   const [activeTab, setActiveTab] = useState("search")
   const [searchTerm, setSearchTerm] = useState("");
   const [allContracts, setAllContracts] = useState<ContractSearchResult[]>([]);
@@ -45,13 +44,16 @@ export default function ContratosPage() {
   const [inspectionsList, setInspectionsList] = useState<InspectionViewDto[]>([]);
   const [viewingDeliverableId, setViewingDeliverableId] = useState<string | null>(null);
   
+  // Evidências
+  const [evidencesList, setEvidencesList] = useState<EvidenceDto[]>([]);
+
   // Modais
-  const [activeModal, setActiveModal] = useState<"deliverable" | "noncompliance" | "penalty" | "inspection" | "evidence" | null>(null);
+  const [activeModal, setActiveModal] = useState<"deliverable" | "noncompliance" | "penalty" | "inspection" | "evidence" | "viewEvidences" | null>(null);
   
   // IDs selecionados
   const [selectedObligationId, setSelectedObligationId] = useState("");
   const [selectedNcId, setSelectedNcId] = useState("");
-  const [selectedDeliverableId, setSelectedDeliverableId] = useState(""); // NOVO
+  const [selectedDeliverableId, setSelectedDeliverableId] = useState("");
 
   // Forms
   const [showObliForm, setShowObliForm] = useState(false);
@@ -60,11 +62,9 @@ export default function ContratosPage() {
   const [newNonCompliance, setNewNonCompliance] = useState<RegisterNonComplianceRequest>({ reason: "", severity: "Baixo" });
   const [newPenalty, setNewPenalty] = useState<ApplyPenaltyRequest>({ type: "Multa", legalBasis: "", amount: 0 });
   
-  // NOVOS ESTADOS PARA FISCALIZAÇÃO
   const [newInspection, setNewInspection] = useState<CreateInspectionRequest>({ date: "", inspector: "", notes: "" });
   const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
 
-  // ... (Mantenha getStatusColor, fetchDetails, fetchContracts, useEffects, handleAddObligation, handleDeleteObligation) ...
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
       case "active": return "bg-green-100 text-green-800";
@@ -84,7 +84,7 @@ export default function ContratosPage() {
     } catch (error) { console.error(error); }
   };
 
-const fetchAttachments = async () => {
+  const fetchAttachments = async () => {
     if (!selectedContractId) return;
     try {
       const res = await fetch(`${API_BASE_URL}/api/contracts/${selectedContractId}/attachments`);
@@ -102,11 +102,40 @@ const fetchAttachments = async () => {
     } catch (e) { console.error(e); }
   };
 
+  const fetchEvidences = async (deliverableId: string) => {
+    try {
+        const res = await fetch(`${API_BASE_URL}/api/deliverables/${deliverableId}/evidences`);
+        if (res.ok) {
+            setEvidencesList(await res.json());
+            setSelectedDeliverableId(deliverableId);
+            setActiveModal("viewEvidences");
+        }
+    } catch (e) { console.error(e); }
+  };
+
   const handleDownloadAttachment = (id: string, fileName: string) => {
       window.open(`${API_BASE_URL}/api/attachments/${id}/download`, '_blank');
   };
 
-  // Atualize o useEffect que carrega detalhes para buscar anexos também
+  const handleDownloadEvidence = (id: string) => {
+    window.open(`${API_BASE_URL}/api/evidences/${id}/download`, '_blank');
+  };
+
+  const handleDeleteAttachment = async (id: string) => {
+    if (!confirm("Excluir este documento permanentemente?")) return;
+    try {
+        const res = await fetch(`${API_BASE_URL}/api/attachments/${id}`, { method: "DELETE" });
+        if (res.ok) {
+            toast.success("Documento excluído!");
+            fetchAttachments();
+        } else {
+            throw new Error();
+        }
+    } catch (e) {
+        toast.error("Erro ao excluir documento.");
+    }
+  };
+
   useEffect(() => {
     if (activeTab === "details" && selectedContractId) { 
         fetchDetails(); 
@@ -139,10 +168,6 @@ const fetchAttachments = async () => {
     setFilteredContracts(allContracts.filter(c => c.officialNumber.toLowerCase().includes(searchTerm.toLowerCase())));
   }, [searchTerm, allContracts]);
 
-  useEffect(() => {
-    if (activeTab === "details" && selectedContractId) { fetchDetails(); setDetailsTab("info"); }
-  }, [activeTab, selectedContractId]);
-
   const handleAddObligation = async () => {
     if (!selectedContractId) return;
     try {
@@ -155,8 +180,8 @@ const fetchAttachments = async () => {
       setShowObliForm(false);
       setNewObligation({ clauseRef: "", description: "", dueDate: "", status: "Pendente" });
       fetchDetails();
-      alert("Obrigação adicionada!");
-    } catch (e) { alert("Erro ao salvar obrigação."); }
+      toast.success("Obrigação adicionada!");
+    } catch (e) { toast.error("Erro ao salvar obrigação."); }
   };
 
   const handleDeleteObligation = async (id: string) => {
@@ -165,22 +190,44 @@ const fetchAttachments = async () => {
       const res = await fetch(`${API_BASE_URL}/api/obligations/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Erro");
       fetchDetails();
-    } catch (e) { alert("Erro ao excluir."); }
+    } catch (e) { toast.error("Erro ao excluir."); }
   };
 
   const handleCreateDeliverable = async () => {
     if (!selectedObligationId) return;
+    
+    // Validação básica
+    if (!newDeliverable.expectedDate || newDeliverable.quantity <= 0) {
+        toast.warning("Preencha a data e uma quantidade válida.");
+        return;
+    }
+
     try {
+      // Garante formato ISO para data
+      const payload = {
+          ...newDeliverable,
+          expectedDate: new Date(newDeliverable.expectedDate).toISOString()
+      };
+
       const res = await fetch(`${API_BASE_URL}/api/obligations/${selectedObligationId}/deliverables`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newDeliverable)
+        body: JSON.stringify(payload)
       });
-      if (!res.ok) throw new Error();
+
+      if (!res.ok) {
+          const errorText = await res.text();
+          console.error("Erro Backend:", errorText); // Ajuda a debugar no Console F12
+          throw new Error("Falha no servidor");
+      }
+
       setActiveModal(null);
       fetchDetails();
-      alert("Entregável criado!");
-    } catch { alert("Erro ao criar entregável"); }
+      toast.success("Entregável criado!");
+    } catch (e) { 
+        console.error(e);
+        toast.error("Erro ao criar entregável. Verifique o console."); 
+    }
   };
 
   const handleMarkDelivered = async (deliverableId: string) => {
@@ -193,7 +240,7 @@ const fetchAttachments = async () => {
       });
       if (!res.ok) throw new Error();
       fetchDetails();
-    } catch { alert("Erro ao marcar entrega"); }
+    } catch { toast.error("Erro ao marcar entrega"); }
   };
 
   const handleRegisterNonCompliance = async () => {
@@ -207,8 +254,8 @@ const fetchAttachments = async () => {
       if (!res.ok) throw new Error();
       setActiveModal(null);
       fetchDetails();
-      alert("Não conformidade registrada!");
-    } catch { alert("Erro ao registrar"); }
+      toast.success("Não conformidade registrada!");
+    } catch { toast.error("Erro ao registrar"); }
   };
 
   const handleApplyPenalty = async () => {
@@ -222,8 +269,8 @@ const fetchAttachments = async () => {
       if (!res.ok) throw new Error();
       setActiveModal(null);
       fetchDetails();
-      alert("Penalidade aplicada!");
-    } catch { alert("Erro ao aplicar penalidade"); }
+      toast.success("Penalidade aplicada!");
+    } catch { toast.error("Erro ao aplicar penalidade"); }
   };
 
   const handleRegisterInspection = async () => {
@@ -240,8 +287,8 @@ const fetchAttachments = async () => {
       if (!res.ok) throw new Error();
       setActiveModal(null);
       setNewInspection({ date: "", inspector: "", notes: "" });
-      alert("Inspeção registrada!");
-    } catch { alert("Erro ao registrar inspeção."); }
+      toast.success("Inspeção registrada!");
+    } catch { toast.error("Erro ao registrar inspeção."); }
   };
 
   const handleUploadEvidence = async () => {
@@ -258,8 +305,8 @@ const fetchAttachments = async () => {
       if (!res.ok) throw new Error();
       setActiveModal(null);
       setEvidenceFile(null);
-      alert("Evidência enviada!");
-    } catch { alert("Erro no upload de evidência."); }
+      toast.success("Evidência enviada!");
+    } catch { toast.error("Erro no upload de evidência."); }
   };
 
   return (
@@ -273,7 +320,6 @@ const fetchAttachments = async () => {
 
         {activeTab === "search" && (
           <div className="space-y-6">
-            {/* ... (Mantenha a barra de busca e lista de contratos) ... */}
             <div className="bg-white rounded-2xl shadow-sm p-6 flex gap-4">
               <div className="flex-1 flex items-center gap-2 bg-gray-100 rounded-lg px-4">
                 <Search size={20} className="text-gray-400" />
@@ -315,7 +361,6 @@ const fetchAttachments = async () => {
               ))}
             </div>
 
-            {/* ... (Aba Info e Obligations mantidas) ... */}
             {detailsTab === 'info' && (
               <div className="space-y-6">
                 <div className="grid grid-cols-2 gap-6">
@@ -325,7 +370,6 @@ const fetchAttachments = async () => {
                   <div><p className="text-xs text-gray-500">Modalidade</p><p className="font-medium">{contractDetails.modality}</p></div>
                 </div>
                 
-                {/* LISTA DE ANEXOS DO CONTRATO */}
                 <div className="border-t pt-4">
                     <h4 className="font-semibold mb-3 flex items-center gap-2"><FileText size={18}/> Documentos Anexados</h4>
                     {attachments.length === 0 ? <p className="text-sm text-gray-400">Nenhum documento.</p> : (
@@ -333,9 +377,14 @@ const fetchAttachments = async () => {
                             {attachments.map(att => (
                                 <div key={att.id} className="flex justify-between items-center p-2 border rounded bg-gray-50 text-sm">
                                     <span className="truncate max-w-[200px]">{att.fileName}</span>
-                                    <button onClick={() => handleDownloadAttachment(att.id, att.fileName)} className="text-blue-600 hover:underline flex items-center gap-1">
-                                        <Download size={14}/> Baixar
-                                    </button>
+                                    <div className="flex gap-2 items-center">
+                                        <button onClick={() => handleDownloadAttachment(att.id, att.fileName)} className="text-blue-600 hover:underline flex items-center gap-1" title="Baixar">
+                                            <Download size={14}/>
+                                        </button>
+                                        <button onClick={() => handleDeleteAttachment(att.id)} className="text-red-500 hover:text-red-700" title="Excluir">
+                                            <Trash2 size={14}/>
+                                        </button>
+                                    </div>
                                 </div>
                             ))}
                         </div>
@@ -353,7 +402,6 @@ const fetchAttachments = async () => {
                 </div>
                 {showObliForm && (
                   <div className="bg-gray-50 p-4 rounded border">
-                    {/* Form Obrigação */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-2">
                       <input className="border p-1 rounded text-sm" placeholder="Ref. Cláusula (ex: 2.1)" value={newObligation.clauseRef} onChange={e => setNewObligation({...newObligation, clauseRef: e.target.value})} />
                       <input className="border p-1 rounded text-sm md:col-span-2" placeholder="Descrição" value={newObligation.description} onChange={e => setNewObligation({...newObligation, description: e.target.value})} />
@@ -411,7 +459,6 @@ const fetchAttachments = async () => {
 
                                 {/* Botões de Ação */}
                                 <div className="flex gap-2 items-center">
-                                  {/* 1. Botão para Abrir/Fechar o Histórico de Inspeções (NOVO) */}
                                   <button 
                                     onClick={() => viewingDeliverableId === dev.id ? setViewingDeliverableId(null) : fetchInspections(dev.id)} 
                                     className={`text-xs px-2 py-1 rounded flex gap-1 transition-colors ${viewingDeliverableId === dev.id ? "bg-gray-200 text-gray-800" : "border border-gray-300 hover:bg-gray-50 text-gray-600"}`}
@@ -420,7 +467,6 @@ const fetchAttachments = async () => {
                                     <Camera size={14}/> {viewingDeliverableId === dev.id ? "Ocultar" : "Histórico"}
                                   </button>
                                   
-                                  {/* 2. Botão Registrar Inspeção */}
                                   <button 
                                     onClick={() => { setSelectedDeliverableId(dev.id); setActiveModal("inspection"); }} 
                                     className="text-xs border border-blue-200 text-blue-700 bg-blue-50 px-2 py-1 rounded hover:bg-blue-100 flex gap-1" 
@@ -429,7 +475,6 @@ const fetchAttachments = async () => {
                                     <ClipboardCheck size={14}/> +Insp.
                                   </button>
 
-                                  {/* 3. Botão Anexar Evidência (JÁ EXISTIA) */}
                                   <button 
                                     onClick={() => { setSelectedDeliverableId(dev.id); setActiveModal("evidence"); }} 
                                     className="text-xs border border-gray-300 px-2 py-1 rounded hover:bg-gray-100 flex gap-1" 
@@ -438,7 +483,14 @@ const fetchAttachments = async () => {
                                     <UploadCloud size={14}/> Evid.
                                   </button>
 
-                                  {/* 4. Status de Entrega (JÁ EXISTIA) */}
+                                  <button 
+                                    onClick={() => fetchEvidences(dev.id)} 
+                                    className="text-xs border border-gray-300 px-2 py-1 rounded hover:bg-gray-100 flex gap-1"
+                                    title="Ver arquivos anexados"
+                                  >
+                                    <Eye size={14}/> Ver Arq.
+                                  </button>
+
                                   {dev.deliveredAt ? (
                                     <span className="text-green-600 text-sm font-bold flex items-center gap-1 px-2 bg-green-50 rounded border border-green-100">
                                       <CheckCircle size={14}/> Entregue
@@ -454,8 +506,6 @@ const fetchAttachments = async () => {
                                 </div>
                               </div>
 
-                              {/* --- ÁREA EXPANSÍVEL DE HISTÓRICO DE INSPEÇÕES (NOVO) --- */}
-                              {/* Só aparece se viewingDeliverableId for igual ao ID deste entregável */}
                               {viewingDeliverableId === dev.id && (
                                 <div className="mt-4 pt-3 border-t border-gray-100">
                                   <h5 className="text-xs font-bold text-gray-700 mb-3 flex items-center gap-2">
@@ -524,7 +574,6 @@ const fetchAttachments = async () => {
 
         {/* --- MODAIS --- */}
         
-        {/* Modal Entregável */}
         {activeModal === "deliverable" && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
             <div className="bg-white p-6 rounded-xl w-96">
@@ -540,7 +589,6 @@ const fetchAttachments = async () => {
           </div>
         )}
 
-        {/* Modal Não Conformidade */}
         {activeModal === "noncompliance" && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
             <div className="bg-white p-6 rounded-xl w-96">
@@ -557,7 +605,6 @@ const fetchAttachments = async () => {
           </div>
         )}
 
-        {/* Modal Penalidade */}
         {activeModal === "penalty" && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
             <div className="bg-white p-6 rounded-xl w-96">
@@ -575,7 +622,6 @@ const fetchAttachments = async () => {
           </div>
         )}
 
-        {/* Modal Inspeção (NOVO) */}
         {activeModal === "inspection" && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
             <div className="bg-white p-6 rounded-xl w-96">
@@ -591,7 +637,6 @@ const fetchAttachments = async () => {
           </div>
         )}
 
-        {/* Modal Evidência (NOVO) */}
         {activeModal === "evidence" && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
             <div className="bg-white p-6 rounded-xl w-96">
@@ -603,6 +648,33 @@ const fetchAttachments = async () => {
               <div className="flex justify-end gap-2">
                 <button onClick={() => setActiveModal(null)} className="px-4 py-2 text-gray-500">Cancelar</button>
                 <button onClick={handleUploadEvidence} disabled={!evidenceFile} className="px-4 py-2 bg-green-600 text-white rounded disabled:opacity-50">Enviar</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeModal === "viewEvidences" && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white p-6 rounded-xl w-96 max-h-[80vh] overflow-auto">
+              <h3 className="font-bold mb-4">Evidências do Entregável</h3>
+              
+              {evidencesList.length === 0 ? (
+                  <p className="text-gray-500 text-sm text-center py-4">Nenhuma evidência anexada.</p>
+              ) : (
+                  <div className="space-y-2">
+                    {evidencesList.map(ev => (
+                        <div key={ev.id} className="flex justify-between items-center p-2 border rounded bg-gray-50 text-sm">
+                            <span className="truncate w-32">{ev.fileName}</span>
+                            <button onClick={() => handleDownloadEvidence(ev.id)} className="text-blue-600 hover:underline text-xs flex items-center gap-1">
+                                <Download size={12}/> Baixar
+                            </button>
+                        </div>
+                    ))}
+                  </div>
+              )}
+              
+              <div className="flex justify-end mt-4">
+                <button onClick={() => setActiveModal(null)} className="px-4 py-2 bg-gray-100 rounded hover:bg-gray-200">Fechar</button>
               </div>
             </div>
           </div>

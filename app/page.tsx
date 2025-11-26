@@ -6,7 +6,7 @@ import Sidebar from "@/components/sidebar"
 import StatCard from "@/components/stat-card"
 import ContractCard from "@/components/contract-card"
 import { API_BASE_URL } from "@/lib/config"
-import { ContractSimpleDto, DashboardStatsDto } from "@/lib/api-types"
+import { ContractSimpleDto, DueDeliverableReportDto } from "@/lib/api-types"
 
 interface Contract {
   id: string;
@@ -14,7 +14,8 @@ interface Contract {
   company: string;
   unit: string;   
   value: string;  
-  date: string;   
+  date: string;
+  hasDelay?: boolean;   
 }
 
 export default function Home() {
@@ -24,36 +25,43 @@ export default function Home() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // 1. Busca Contratos Recentes
-        const response = await fetch(`${API_BASE_URL}/api/contracts`);
-        if (!response.ok) throw new Error("Falha ao buscar contratos");
-        const data: ContractSimpleDto[] = await response.json();
-        
-        const mappedContracts: Contract[] = data.slice(0, 5).map(c => ({
+        // 1. Busca Contratos e Relatórios em paralelo
+        const [contractsRes, statusRes, dueRes] = await Promise.all([
+            fetch(`${API_BASE_URL}/api/contracts`),
+            fetch(`${API_BASE_URL}/api/reports/contract-status`),
+            fetch(`${API_BASE_URL}/api/reports/due-deliverables`)
+        ]);
+
+        if (!contractsRes.ok) throw new Error("Falha ao buscar contratos");
+
+        const contractsData: ContractSimpleDto[] = await contractsRes.json();
+        const statusData = statusRes.ok ? await statusRes.json() : [];
+        const dueData: DueDeliverableReportDto[] = dueRes.ok ? await dueRes.json() : [];
+
+        // 2. Cria um conjunto (Set) com os IDs dos contratos que têm atraso
+        const overdueContractIds = new Set(dueData.map(d => d.contractId));
+
+        // 3. Mapeia os contratos verificando se o ID está na lista de atrasos
+        const mappedContracts: Contract[] = contractsData.slice(0, 5).map(c => ({
           id: c.officialNumber,
           status: c.status,
           company: `ID: ${c.id.substring(0, 8)}...`,
           unit: "N/A",
           value: "N/A",
-          date: "Recente",    
+          date: "Recente",
+          hasDelay: overdueContractIds.has(c.id) // Define se pinta de vermelho
         }));
+        
         setContracts(mappedContracts);
 
-        // 2. Busca Estatísticas Reais
-        // Status
-        const statusRes = await fetch(`${API_BASE_URL}/api/reports/contract-status`);
-        const statusData = await statusRes.json(); // Retorna array [{status: "Active", count: 5}, ...]
-        
-        // Atrasos
-        const dueRes = await fetch(`${API_BASE_URL}/api/reports/due-deliverables`);
-        const dueData = await dueRes.json(); // Retorna lista de itens vencidos
-
-        // Calcular Totais
-        const activeCount = statusData.find((s: any) => s.status === "Active")?.count || 0;
-        const totalCount = data.length; // Total de contratos listados
+        // 4. Estatísticas
+        const activeCount = Array.isArray(statusData) 
+            ? statusData.find((s: any) => s.status === "Active")?.count || 0 
+            : 0;
+            
         const overdueCount = dueData.length;
 
-        setStats({ active: activeCount, overdue: overdueCount, total: totalCount });
+        setStats({ active: activeCount, overdue: overdueCount, total: contractsData.length });
 
       } catch (error) {
         console.error("Erro ao carregar dashboard:", error);
@@ -73,27 +81,26 @@ export default function Home() {
             <p className="text-muted-foreground">Visão geral em tempo real</p>
           </div>
 
-          {/*  - Agora com dados reais */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             <StatCard 
               title="Contratos Ativos" 
               value={stats.active.toString()} 
               icon="📋" 
-              color="bg-blue-100" 
+              color="text-blue-600" 
               iconBg="bg-blue-500" 
             />
             <StatCard 
               title="Total de Contratos" 
               value={stats.total.toString()} 
               icon="Vg" 
-              color="bg-orange-100" 
+              color="text-orange-600" 
               iconBg="bg-orange-500" 
             />
             <StatCard 
               title="Itens em Atraso" 
               value={stats.overdue.toString()} 
               icon="🚨" 
-              color="bg-red-100" 
+              color="text-red-600" 
               iconBg="bg-red-500" 
             />
           </div>
